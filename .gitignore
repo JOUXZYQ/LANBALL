@@ -1,0 +1,15 @@
+/target/
+/lib/
+/lanball-*-data/
+*.log
+*.p12
+*.profile
+*.match
+*.replay
+*.pending
+/tests/classes/
+/tests/test-data/
+/tests/screenshots/
+.idea/
+.vscode/
+*.iml

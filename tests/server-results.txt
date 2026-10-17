@@ -1,0 +1,50 @@
+PASS 1 damaged profile and match do not block hosting
+PASS 2 damaged files left unchanged
+PASS 3 certificate mismatch rejected before credentials
+PASS 4 TLS clients register successfully
+PASS 5 PIN not stored in plaintext
+PASS 6 snapshot cadence >=25/s; measured 29.5
+PASS 7 physics continues through concurrent password work: 5 ticks
+PASS 8 duplicate login cannot disconnect owner
+PASS 9 joining does not start a match
+PASS 10 start requires explicit ready
+PASS 11 team change clears readiness despite continuous input
+PASS 12 ready teams start with countdown
+PASS 13 active roster is frozen
+PASS 14 exactly overlapping bodies separate
+PASS 15 head-on players block each other
+PASS 16 wall collision resolution stays bounded
+PASS 17 input moves authoritative body
+PASS 18 stale inputs are ignored
+PASS 19 kick has speed and statistic
+PASS 20 kick cooldown enforced
+PASS 21 partial crossing is not a goal
+PASS 22 whole ball goal credits scorer and pauses
+PASS 23 own goal is recorded separately
+PASS 24 solid goal post reflects ball
+PASS 25 ranked disconnect pauses round
+PASS 26 ranked reconnect restarts with kickoff
+PASS 27 ranked Elo uses team means
+PASS 28 result clears readiness
+PASS 29 league has named columns
+PASS 30 host report downloads to client
+PASS 31 saved replay downloads
+PASS 32 invalid replay path reports an error
+PASS 33 chat works after failed download
+PASS 34 balance clears ready
+PASS 35 settings bounds validated
+PASS 36 non-finite pitch rejected
+PASS 37 ranked enforces standard geometry
+PASS 38 damaged late row cannot partially alter totals
+PASS 39 profiles survive reload
+PASS 40 season persists
+PASS 41 duplicate match IDs cannot double-count standings
+PASS 42 tournament enforces selected fixture rosters
+PASS 43 valid tournament fixture starts
+PASS 44 write failure leaves recoverable pending result
+PASS 45 retry commits result once
+PASS 46 completed fixture cannot be played twice
+PASS 47 abandoned rounds are stored but excluded from standings
+PASS 48 replay contains final match phase
+PASS 49 shutdown closes host socket
+ALL 49 CHECKS PASSED. Data: ..\v41-tests\league-8412963711804920837
