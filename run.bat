@@ -1,3 +1,5 @@
-@cd /d "%~dp0"
-@java --enable-native-access=javafx.graphics,javafx.media --module-path lib --add-modules javafx.controls,javafx.media -cp target\lanball-v4-4.1.0.jar lanball.LanBall
-@if errorlevel 1 pause
+@echo off
+rem Starts LanBall. Saved players and matches go in the lanball-v4-data folder next to this file.
+cd /d "%~dp0"
+java -jar LanBall-v7.jar
+if errorlevel 1 pause

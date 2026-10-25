@@ -1,130 +1,119 @@
-# LanBall 4.1 — After Hours
+<p align="center"><img src="docs/logo/lanball-logo-wide.png" alt="LanBall" width="640"></p>
 
-A separate revision of v4. Previous v3 and v4 packages are unchanged.
+# LanBall 7.1: Wi-Fi football in plain Java Swing
 
-**995 physical lines of Java across six source files**, including imports, comments and
-blank lines. The two Windows scripts add five lines: **1,000 application/launcher lines
-in total**. Maven XML and iOS permission metadata are additional build configuration;
-third-party JavaFX implementation, WAV audio assets, documentation and the separate test
-harness are excluded. There is no HTML/JavaScript client, FXML, external stylesheet or
-hidden generated game code. The application uses JavaFX controls and media libraries.
+LanBall is a 2-6 player football game for computers on the same Wi-Fi or LAN. One computer hosts; the others join its IP address.
+v7 is the v6 game (sounds, effects, levels, badges) rebuilt under the PBCST304 rule: **use only what the KTU Special OOP notes
+teach** (Modules 1-4). It needs **only a JDK or JRE, Java 8 or newer**. No Maven, no JavaFX, no extra libraries.
 
-## Source checkout
+**Size: 999 Java lines** (limit 1000) in 4 files: `Server.java` 373, `LanBall.java` 325, `Pitch.java` 232, `Sound.java` 69.
 
-This Git repository contains source, documentation and regression tests. Install JDK 21
-and Maven, then run `build.bat` to create the JAR and download JavaFX into `lib`.
-After the build, run `run.bat`. The prebuilt ZIP instructions below apply to release packages.
+![A real match: a kick under pressure](docs/screenshots/gameplay-1-action.png)
 
-## Run
+## What is new in 7.1
 
-Extract the whole folder and open **`run.bat`**. Use **JDK 21** on Windows x64 (tested).
-Hosting invokes the JDK's `keytool` once to create a local TLS identity, so a JRE alone
-is insufficient for hosting. JavaFX libraries and the rebuilt JAR are included.
+- **Corner physics fixed.** The ball no longer zig-zags when two players pin it against a wall or into a corner.
+  A touch now pushes the ball out by the overlap and bounces it off the moving player; a wall turns only a ball that moves
+  into it; a ball squeezed between two players stops; a pinned ball loses its speed. Direction flips in a 120-tick squeeze: 68 → 0.
+- **LEAVE fixed.** An old snapshot that arrived just before LEAVE could put the screen back into the finished match. It is now dropped.
+- **Linux and macOS scripts:** `run.sh` and `build.sh`. Fedora guide: [docs/FEDORA_SETUP.md](docs/FEDORA_SETUP.md).
+- **Logo** in `docs/logo`, real gameplay images in `docs/screenshots`, and the test programs in [`tests/`](tests/README.md).
 
-1. Fill in name, PIN, club and shirt; select Create profile for a new account.
-2. Choose Host Match. The first launch creates a certificate and may take a few seconds.
-3. Give friends the displayed host IP and SHA-256 fingerprint through a trusted channel.
-   The host's Fingerprint field is also populated, so it can be selected and copied.
-4. Friends on the same LAN enter that IP, paste the verified fingerprint, create/sign in
-   with their own profile, and choose Join Match. Allow private-network TCP port 45888.
-5. Choose teams, mark Ready, and let the host press Start. Match setup selects team size,
-   time limit, target score, ranked mode and pitch. Applying settings clears team/readiness.
-6. WASD/arrows move; Space/X kicks; Enter focuses chat. Touch buttons support movement
-   plus kick together. Escape opens/closes the clubhouse. The clubhouse collapses during
-   play to give the pitch and touch controls room; tap its title to reopen it.
-7. The host can balance teams by Elo, start a rematch or abandon a round. Leaving a host
-   requires confirmation and ends the session. Complete rounds are recorded automatically.
+## Run it
 
-Practice creates an isolated temporary host and a practice profile. Choose a side and
-press Start; practice does not create league match results. Stop it before hosting a league.
+- **Windows:** double-click `run.bat`. **Linux / macOS:** `sh run.sh`. Or anywhere: `java -jar LanBall-v7.jar`.
+- To rebuild after you change the code: `build.bat` (Windows) or `sh build.sh` (Linux / macOS).
+- Saved players and matches go in `lanball-v4-data` next to the JAR. Earlier versions used the same folder and file formats.
+  To use another folder: `java -Dlanball.data=myfolder -jar LanBall-v7.jar`.
 
-## What changed
+**How to play**
+1. Fill in Player name, PIN (6-12 digits), Club and Shirt. Keep "Create profile" ticked the first time.
+2. One player clicks **HOST**. The window then shows the address the others must type (port 45888).
+3. The others type that address in Host IP and click **JOIN**.
+4. Each player chooses Red, Blue or Watch, then ticks **READY**. The host clicks **START MATCH**.
+5. Move with WASD or the arrow keys. Kick with Space. If the keys stop working, click the pitch.
 
-| Reported issue | Repair |
-|---|---|
-| About 10 snapshots/s; choppy motion | Independent input and snapshot streams; 60 Hz simulation; 30 Hz paced snapshot writers; an independent JavaFX render loop interpolates positions |
-| PIN hashing freezes physics | Profile validation and PBKDF2 run before acquiring the simulation lock; file writes run outside physics |
-| A damaged file prevents hosting | Validate each file completely, skip/report damaged files, preserve their bytes, reject duplicate match IDs |
-| PIN readable on Wi-Fi | TLS 1.3 and mandatory SHA-256 certificate pinning before credentials are sent; mismatches fail closed |
-| Team changes retain Ready | Ready is an explicit command, cleared on team changes; control acknowledgements prevent stale snapshots undoing UI selections |
-| Raw Java arrays in standings | Tables with named columns, player/season filters, history, Elo charts and head-to-head comparison |
-| Players pass through each other | Iterative body separation, collision impulses and wall constraints; shielding/blocking now work |
+## The notes rule
 
-The presentation adds a dark stadium, striped turf, coloured goals, numbered players,
-scoreboard, goal confetti, kick/wall/whistle/goal audio, volume/mute, reduced motion,
-larger text and high contrast. Audio is synthesized WAV content loaded with JavaFX.
+The team agreed this rule: the **Java language** in this code is limited to what the notes teach. The code also uses **library classes**
+from the packages that the notes name (`java.net`, `java.io`, `javax.swing`, `java.awt`). The table below lists each one and why it is necessary.
 
-## Restored features and remaining gaps
+### Language: where each construct is taught
 
-Restored in compact form: practice; host/join/discovery; 1v1–3v3 and spectators;
-ready/countdown/goal pause/rematch; ranked disconnect pause and reconnect attempts;
-abandoned records; assists/own goals/touches/kicks; Elo balancing; league and season
-names; filtered tables; match reports; player rating charts; head-to-head; chat;
-host-served replays with seek/play/pause/next-goal; named pitch dimensions; four-team
-round-robin fixtures with roster checks and points tables; key bindings; sound and
-display preferences; a cached offline league report; help.
+| Construct used | Notes module and topic | Where in the code |
+|---|---|---|
+| Primitive types, casting, wrapper classes (`Integer.parseInt`) | M1: data types, casting, wrappers | everywhere; `(int) ballX`, `(short)` in Sound |
+| 1-D and 2-D arrays, anonymous arrays, for-each | M1: arrays | `int[][] rows` in `Server.addResult`, `new float[]{0, 1}` in Pitch |
+| `String` methods, `Vector<T>`, `Iterator`-style loops | M1: strings, Vector class | `Vector<Player>`, `Vector<Profile>`, chat lines |
+| Operators: bitwise `& \| ~ <<`, ternary, `++` | M1: operators | input bits (left 1, right 2, up 4, down 8, kick 16, ready 32), badge bits |
+| `if`, `switch` with `break` and fall-through, `while`, `for`, `continue`, `return` | M1: control statements | `LanBall.bit` (key switch), `Sound.synthesize` |
+| Varargs `Component... parts` | M1: varargs | `LanBall.row`, `LanBall.column`, `Card` |
+| Classes, objects, constructors, `this` | M2: objects, constructors, `this` | every class; `this.socket = socket` |
+| Objects as parameters, returning objects | M2: objects as parameters, returning objects | `stats(name)` returns a `Profile` |
+| `static` variables, methods; `final` and blank `final` | M2: static, final | `Server.PORT`, `final JPanel connection` set in the constructor |
+| Inner classes | M2: inner classes | `Server.Acceptor`, `Server.Connection`, `LanBall.Link`, `Pitch.Body` |
+| Inheritance, `extends`, `super(...)`, overriding | M2: inheritance, `super`, overriding | `Pitch extends JPanel`, `GameButton extends JButton` overrides `paintComponent` |
+| Dynamic method dispatch | M2: dynamic dispatch | Swing calls our `paintComponent` through a `JComponent` reference |
+| Packages, `import`, access modifiers | M3: packages, access protection | `package lanball;`, `public`/`protected`/default members |
+| Interfaces, `implements`, many interfaces | M3: interfaces | `LanBall implements ActionListener, KeyListener, FocusListener, MouseListener`; `Runnable` |
+| `try`, many `catch`, `finally`, `throw`, `throws` | M3: exceptions | `Server.read` (finally closes the file), `Connection.run` |
+| Checked and unchecked exceptions; custom exception | M3: custom exceptions | `LoginException extends Exception` |
+| Swing controls: JFrame, JPanel, JLabel, JButton, JTextField, JPasswordField, JCheckBox, JComboBox, JTextArea, JScrollPane | M4: Swing controls | `LanBall` constructor |
+| Layout managers: BorderLayout, FlowLayout, GridLayout, BoxLayout | M4: layout managers | `content`, `row`, `xpBox`, `column` |
+| Delegation event model: source, listener, register, handle | M4: event handling | `addActionListener(this)`, `actionPerformed` checks `e.getSource()` |
+| `synchronized` | M1: the non-access modifier list | methods that the network thread and the window both use |
 
-**This is not complete v3 feature parity.** Full old-format import, v3's multi-tournament
-archive, separate pitch visual themes, per-host offline libraries and some richer report
-and lifecycle controls are not restored. See [the explicit comparison](docs/V3_COMPARISON.md).
-The 1,000-line cap has been preserved rather than concealing more code in generated files.
+Not used, because the notes do not teach them: lambdas, anonymous classes, enums, records, `var`, streams, `switch ->`,
+try-with-resources, multi-catch, `instanceof` patterns, `HashMap`. One construct goes slightly past the notes: the
+`(Graphics2D) graphics` cast. The notes show casting for primitives and upcasting; this is the matching downcast.
 
-## Records and identity
+### Library classes outside the notes (agreed)
 
-The host uses **`lanball-v41-data` beside the launcher**. It does not read or modify v3/v4
-data folders. Keep these together when backing up with the host closed:
+| Class | Package (named in the notes?) | Why it is necessary |
+|---|---|---|
+| `Socket`, `ServerSocket`, `DataInputStream`, `DataOutputStream` | `java.net`, `java.io` (yes, M3 list) | the LAN connection |
+| `Thread` (with our `Runnable` classes) | `java.lang` | the host runs players, the clock and the listener at the same time |
+| `File`, `FileReader`, `BufferedReader`, `FileWriter` | `java.io` (yes) | saves profiles and match results |
+| `javax.swing.Timer` | `javax.swing` (yes) | redraws about 60 times a second; it calls `actionPerformed` |
+| `Graphics2D`, `GradientPaint`, `RadialGradientPaint`, `Ellipse2D` | `java.awt` (yes, with AWT) | draws the pitch, players and effects |
+| `Clip`, `AudioSystem`, `AudioFormat` | `javax.sound.sampled` (no) | plays the sounds |
+| `MessageDigest`, `SecretKeyFactory`, `PBEKeySpec`, `Base64` | `java.security`, `javax.crypto`, `java.util` (no) | PIN login without sending the PIN |
+| `FileLock`, `StandardCharsets`, `NetworkInterface` | `java.nio`, `java.net` | one host per data folder; show the host's IP address |
 
-- `player-*.profile`: name, club, shirt, salt and PBKDF2 PIN verifier. No plaintext PIN.
-- `*.match`: immutable completed/abandoned match records, participants, stats, ratings,
-  scores, season, pitch dimensions and fixture identity.
-- `*.replay`: recorded snapshots, including the final match phase and score.
-- `league.properties`: league/season names, named pitches and the current tournament.
-- `host.p12`: private host identity; `fingerprint.txt`: its public fingerprint.
-- `*.bak`: previous versions of replaceable files; `.pending`: unfinished writes.
+## What 7.1 has
 
-Local preferences and the most recently cached league report live in
-`~/LanBall/v41-settings.properties` and `~/LanBall/league-cache.txt`. PINs are not saved
-in client preferences. Protect the host identity file and verify its fingerprint before
-joining. TLS confidentiality does not make a short PIN resistant to offline guessing if
-someone obtains the profile files.
+- **Game look:** night-stadium theme, striped floodlit pitch, goal nets in team colours, gradient players with shadows, a ball trail,
+  a pulsing gold ring on your own player, name tags with one dot per goal, rounded gold buttons.
+- **Moments:** 3-2-1 kick-off countdown, goal banner, confetti, screen shake and flash on a goal, a VICTORY / DEFEAT / DRAW screen
+  with the XP you earned, and "Tick READY for a rematch".
+- **Sounds (made in code, no audio files):** kick, bounce, whistle, goal horn with crowd, countdown beeps, button click, level-up,
+  victory fanfare. Untick "Sound" to mute. If the computer has no sound device, the game plays silently.
+- **Progress:** XP (played 20, win 50, draw 20, goal 15, badge 100). Level n needs 50 x n x n XP. The player card shows your level,
+  XP bar, win/draw/loss record, Elo and win streak. There are 8 badges (hover over "Badges" to see yours).
+- **Recognition:** goal call-outs (brace, HAT-TRICK, own goal), Player of the match, badge and level-up announcements in chat.
+- **League:** team Elo (start 1000, K = 24, each side uses its mean rating), points, goals and best streak. The league is rebuilt
+  from the match files every time the host starts.
+- **Chat**, damaged-file skipping, a 3-a-side limit, collisions, and a challenge-response PIN login (the PIN never crosses the network).
 
-Match totals are rebuilt from valid match files. The host lists bad filenames after login
-and leaves them unchanged. A failed result write pauses progression; Start retries it.
-Abandoned matches are retained but do not count towards completed standings or Elo.
-Only completed ranked rounds with everyone present change Elo. A ranked disconnection
-pauses up to 30 seconds; a returning player resumes via kickoff. Casual rounds continue.
+**Engagement design, and what we did not use.** v7 uses methods from game research: clear goals, quick feedback, visible progress,
+skill-based rewards, recognition from friends, and quick rematches. It does **not** use random loot rewards, countdown offers,
+penalties for missing a day, or tricks that make quitting hard. After every 5 rounds the chat says
+"nice session! Stretch and hydrate."
 
-## Tournament and reports
+## Checks run (25 Oct 2026)
 
-Create four lines such as `Team A:Asha,Binu` using already registered players. Reopen
-Tournament after creation, choose a fixture, put the listed players on the corresponding
-Red/Blue sides, mark ready and start. Completed fixtures cannot be replayed; abandoned
-ones can. Points are win 3/draw 1, sorted by points, goal difference, then goals scored.
-Choose Ordinary match to clear the fixture. There is one actively managed tournament.
+- **35 real-TCP checks:** registration, PIN never sent, wrong PIN, damaged files, four logins during play (worst tick gap 25 ms),
+  about 37 snapshots a second, chat, ready reset, countdown, collision, goal, Elo 1012/988, Player of the match, badges,
+  XP 285 = level 3, streaks, aligned league table, restart rebuilds standings and badges.
+- **9 window checks:** two real LanBall windows (not shown on screen) go through HOST, JOIN, team, READY, START, chat and LEAVE.
+- **Corner trace:** 3 squeeze cases, 120 ticks each; no direction flips.
+- **Real match:** a full 2v2 match (real host, three bots, one hidden window), frames saved to `docs/screenshots/gameplay-*.png`.
+- **5 screens** drawn off-screen to `docs/screenshots` (offline, lobby, countdown, goal, result).
+- How to run every check: [tests/README.md](tests/README.md).
+- Compiled for Java 8 (`--release 8`) with JDK 26.
 
-League queries use an optional exact player and season name. History without a player
-filter contains all participants, which is needed for head-to-head comparisons. Select
-a history row for that player's rating chart or the match's replay. Replays and reports
-come from the connected host. Offline League displays the last cached report, marked offline.
+**Not tested yet:** two physical computers on Wi-Fi, a Windows firewall prompt on a lab PC, sound on the real speakers,
+and playtests with people.
 
-## Mobile status
-
-The shared JavaFX client includes touch controls, responsive layout, Android/iOS Maven
-profiles and the iOS local-network permission. **No APK or signed iPhone app has been
-built or tested here.** Phone installation requires a native build; a phone browser
-cannot join. Android builds require the supported Linux/WSL toolchain; iPhone builds need
-macOS/Xcode and signing. See [mobile build instructions](docs/MOBILE.md).
-
-## Build and verification
-
-Use Maven and JDK 21: `build.bat`, or `mvn package dependency:copy-dependencies -DoutputDirectory=lib`.
-Desktop execution from source: `mvn javafx:run`. Other desktop platforms must resolve their
-own JavaFX native libraries with Maven; the bundled `lib` directory targets Windows x64.
-
-- [Validation](docs/VALIDATION.md): measurements, checks and limits.
-- [Engagement design](docs/ENGAGEMENT.md): research-informed design choices, not a claim of proven addictiveness.
-- [Source count](docs/LINE_COUNT.md): every delivered application source file.
-
-The original assessment flow remains: accept profile/game/pitch/tournament input, store
-records permanently, and process them into results, standings, ratings and comparisons.
-
+**Changes from v6:** JavaFX became Swing, so there is no phone client now. The network protocol is "LB7", so v6 and v7 cannot
+play together. The data folder and its files are the same.
