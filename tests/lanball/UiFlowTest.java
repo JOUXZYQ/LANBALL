@@ -59,6 +59,7 @@ public class UiFlowTest {
     public static void main(String[] args) throws Exception {
         shots = new File(args[0]);
         shots.mkdirs();
+        System.setProperty("lanball.data", new File(shots, "accounts").getAbsolutePath());
         swing(
                 () -> {
                     LanBall.darkDefaults();

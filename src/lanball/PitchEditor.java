@@ -23,14 +23,16 @@ public class PitchEditor extends JDialog implements ActionListener, MouseListene
 
     class Canvas extends JPanel {
         Canvas() {
-            setPreferredSize(new Dimension(768, 432));
+            setPreferredSize(new Dimension(800, 464));
             setBackground(Pitch.BACK);
         }
 
         protected void paintComponent(Graphics graphics) {
             super.paintComponent(graphics);
             Graphics2D g = (Graphics2D) graphics.create();
-            g.scale(getWidth() / 960.0, getHeight() / 540.0);
+            // The stadium image has a 20-unit border round the 960 x 540 field.
+            g.scale(getWidth() / 1000.0, getHeight() / 580.0);
+            g.translate(20, 20);
             Pitch view = new Pitch();
             view.arena = arena;
             view.drawField(g);
@@ -125,7 +127,8 @@ public class PitchEditor extends JDialog implements ActionListener, MouseListene
     }
 
     public void mousePressed(MouseEvent e) {
-        double x = e.getX() * 960.0 / canvas.getWidth(), y = e.getY() * 540.0 / canvas.getHeight();
+        double x = e.getX() * 1000.0 / canvas.getWidth() - 20,
+                y = e.getY() * 580.0 / canvas.getHeight() - 20;
         if (SwingUtilities.isRightMouseButton(e)) {
             for (int i = arena.bumpers.size() - 1; i >= 0; i--) {
                 Circle c = arena.bumpers.get(i);

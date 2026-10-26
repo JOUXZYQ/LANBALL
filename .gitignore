@@ -6,3 +6,6 @@ docs/DEMO-AND-QA.md
 docs/SLIDE_PROMPTS.*
 docs/make_*.py
 *.class
+build/
+docs/LanBall-ALL.pdf
+docs/gamma/
