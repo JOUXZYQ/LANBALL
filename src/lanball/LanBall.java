@@ -1,325 +1,791 @@
 package lanball;
+
 import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
 import java.net.*;
-import java.util.Enumeration;
+import java.util.*;
+
 import javax.swing.*;
 import javax.swing.Timer;
 
-/*
- * The Swing window: controls, the player card, chat, the league table and the link to the host.
- * Module 4: Swing controls, layout managers and the delegation event model. This class is the listener
- * for its own controls (ActionListener), the keyboard (KeyListener), focus (FocusListener) and the mouse (MouseListener).
- */
-public class LanBall extends JFrame implements ActionListener, KeyListener, FocusListener, MouseListener {
-    // The look: a night stadium. Dark navy panels, gold for "you" and rewards, red and blue only for the two teams.
-    static final Color NAVY = new Color(0x0b1020), PANEL = new Color(0x161f44), TEXT = new Color(0xe8eeff);
-    static final String ROW = "%-3s %-12s %3s %3s %3s %3s %4s %4s %5s %4s%n"; // league table columns
-    final JTextField address = field("127.0.0.1", 10), name = field("", 9), club = field("", 9), shirt = field("7", 3);
-    final JTextField seconds = field("180", 4), target = field("5", 3), chatInput = field("", 22);
-    final JPasswordField pin = new JPasswordField(8);
-    final JCheckBox create = check("Create profile"), ready = check("READY"), sound = check("Sound");
-    final JComboBox<String> team = new JComboBox<String>(new String[]{"Red", "Blue", "Watch"});
-    final JLabel status = label("Host on one computer; friends on the same Wi-Fi join its IP address.", 14, TEXT);
-    final JLabel hostAddress = label(" ", 13, Pitch.GOLD), level = label("Lv 1", 24, Pitch.GOLD);
-    final JLabel progress = label("Play a match to earn XP", 12, Pitch.MUTED), results = label("No matches yet", 14, TEXT);
-    final JLabel badges = label("Badges 0/8", 14, TEXT);
-    final JProgressBar xpBar = new JProgressBar(0, 1000);
-    final JTextArea chatLog = area(), league = area();
-    final GameButton host = new GameButton("HOST", true, this), join = new GameButton("JOIN", false, this);
-    final GameButton start = new GameButton("START MATCH", true, this), leave = new GameButton("LEAVE", false, this);
-    final JPanel connection;
+/** Main window: ordinary Swing controls around a snapshot-only pitch view. */
+public class LanBall extends JFrame
+        implements ActionListener, KeyListener, FocusListener, MouseListener {
+    final JTextField address = new JTextField("127.0.0.1", 10),
+            name = new JTextField(9),
+            club = new JTextField("College", 8),
+            shirt = new JTextField("7", 2);
+    final JPasswordField password = new JPasswordField(9);
+    final JCheckBox create = new JCheckBox("Create account", true), ready = new JCheckBox("Ready");
+    final JComboBox<String> team = new JComboBox<String>(new String[] {"Red", "Blue", "Watch"});
+    final JTextField seconds = new JTextField("180", 3),
+            target = new JTextField("5", 2),
+            chatInput = new JTextField();
+    final JButton roomToggle = new JButton("Hide room"),
+            host = new JButton("Host"),
+            join = new JButton("Join"),
+            leave = new JButton("Leave"),
+            start = new JButton("Start match");
+    final JButton editor = new JButton("Pitch editor"),
+            phones = new JButton("Phones"),
+            season = new JButton("Season"),
+            refresh = new JButton("Refresh"),
+            details = new JButton("Summary"),
+            replay = new JButton("Replay"),
+            profile = new JButton("My profile");
+    final JButton prev = new JButton("Previous"),
+            next = new JButton("Next"),
+            historyPrev = new JButton("Previous"),
+            historyNext = new JButton("Next");
+    final JLabel
+            status =
+                    new JLabel(
+                            "Create an account or sign in. One player hosts; the others join the"
+                                    + " host IP."),
+            room = new JLabel(" ");
+    final JTextArea chatLog = area(), league = area(), profileText = area();
+    final DefaultListModel<String> historyModel = new DefaultListModel<String>();
+    final JList<String> historyList = new JList<String>(historyModel);
+    final JTabbedPane tabs = new JTabbedPane();
+    final JPanel connection = new JPanel(new GridLayout(2, 1, 0, 4));
     final Pitch pitch = new Pitch();
-    final Timer timer = new Timer(15, this);
-    int keys, controls, wantedTeam, generation, myXp = -1, xpAtKickoff;
-    long lastFrame = System.nanoTime();
-    String previousPhase = "", outgoingChat = "", incoming, failure, linked;
-    Socket socket;
+    final Timer timer = new Timer(16, this);
+    final boolean[] down = new boolean[256];
+    final Vector<String> commands = new Vector<String>(), responses = new Vector<String>();
+    String myName = "", incoming, failure, outgoingChat = "";
+    int controls, pendingTeam = -1, leaguePage, historyPage;
+    boolean updating, connected;
     Server server;
+    Link link;
+    Replay downloaded;
+    long lastFrame = System.nanoTime(), noticeUntil;
+
     LanBall() {
-        super("LanBall - Wi-Fi football");
-        create.setSelected(true); sound.setSelected(true); start.setEnabled(false);
-        style(team); style(pin); pin.setCaretColor(Color.WHITE); team.setFocusable(false);
-        team.addActionListener(this); ready.addActionListener(this); sound.addActionListener(this); chatInput.addActionListener(this);
-        xpBar.setForeground(Pitch.GOLD); xpBar.setBackground(PANEL); xpBar.setBorderPainted(false);
-        xpBar.setPreferredSize(new Dimension(200, 10));
-        JPanel xpBox = new JPanel(new GridLayout(2, 1, 0, 4));
-        xpBox.setOpaque(false); xpBox.add(xpBar); xpBox.add(progress);
-        badges.setToolTipText("No badges yet");
-        connection = row(caption("Host IP", address), caption("Player name", name), caption("PIN (6-12 digits)", pin),
-                caption("Club", club), caption("Shirt 1-99", shirt), create, host, join);
-        JPanel top = column(row(label("LANBALL", 34, Pitch.GOLD), new Card(level, xpBox, results, badges)), connection,
-                row(team, ready, caption("Seconds", seconds), caption("First to", target), start, sound, leave),
-                row(status), row(hostAddress));
-        JPanel side = column(row(label("CHAT", 16, Pitch.GOLD)), scroll(chatLog, 150), row(chatInput),
-                row(label("LEAGUE TABLE", 16, Pitch.GOLD)), scroll(league, 330));
-        side.setPreferredSize(new Dimension(430, 600));
-        JPanel content = new JPanel(new BorderLayout(14, 10)); // layout managers (Module 4): Border, Box, Flow, Grid
-        content.setBackground(NAVY);
-        content.setBorder(BorderFactory.createEmptyBorder(8, 16, 12, 16));
-        content.add(top, BorderLayout.NORTH); content.add(pitch, BorderLayout.CENTER); content.add(side, BorderLayout.EAST);
-        content.add(label("WASD or arrow keys to move, Space to kick. Click the pitch if the keys stop working.", 13,
-                Pitch.MUTED), BorderLayout.SOUTH);
+        super("LanBall v9");
+        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+        JPanel identity = row(new JLabel("Name"), name, new JLabel("Password"), password, create);
+        JPanel network =
+                row(
+                        new JLabel("Host IP"),
+                        address,
+                        new JLabel("Club"),
+                        club,
+                        new JLabel("Shirt"),
+                        shirt,
+                        host,
+                        join);
+        connection.add(identity);
+        connection.add(network);
+        team.setSelectedIndex(2);
+        JPanel controls =
+                row(
+                        new JLabel("Team"),
+                        team,
+                        ready,
+                        new JLabel("Seconds"),
+                        seconds,
+                        new JLabel("First to"),
+                        target,
+                        start,
+                        leave);
+        JPanel tools = row(editor, season, phones, roomToggle);
+        JLabel brand = new JLabel("LANBALL  /  LOCAL FOOTBALL");
+        JPanel heading = new JPanel(new BorderLayout());
+        heading.add(brand, BorderLayout.WEST);
+        heading.add(tools, BorderLayout.EAST);
+        JPanel top = new JPanel();
+        top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
+        top.add(heading);
+        top.add(connection);
+        top.add(controls);
+        top.add(row(status));
+        top.add(row(room));
+        JPanel chat = new JPanel(new BorderLayout(0, 6));
+        chat.add(new JScrollPane(chatLog));
+        chat.add(chatInput, BorderLayout.SOUTH);
+        JPanel table = new JPanel(new BorderLayout());
+        table.add(new JScrollPane(league));
+        table.add(row(prev, next), BorderLayout.SOUTH);
+        JPanel history = new JPanel(new BorderLayout());
+        history.add(new JScrollPane(historyList));
+        JPanel historyButtons = new JPanel(new GridLayout(2, 1));
+        historyButtons.add(row(refresh, details, replay));
+        historyButtons.add(row(historyPrev, historyNext));
+        history.add(historyButtons, BorderLayout.SOUTH);
+        JPanel card = new JPanel(new BorderLayout());
+        card.add(new JScrollPane(profileText));
+        card.add(row(profile), BorderLayout.SOUTH);
+        tabs.addTab("Chat", chat);
+        tabs.addTab("League", table);
+        tabs.addTab("History", history);
+        tabs.addTab("Profile", card);
+        tabs.setPreferredSize(new Dimension(340, 450));
+        JPanel middle = new JPanel(new BorderLayout(12, 0));
+        middle.add(pitch);
+        middle.add(tabs, BorderLayout.EAST);
+        JPanel content = new JPanel(new BorderLayout(8, 8));
+        content.setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
+        content.add(top, BorderLayout.NORTH);
+        content.add(middle);
+        content.add(
+                new JLabel(
+                        "WASD / arrows  move     SPACE  kick     Click the pitch to return to the"
+                                + " game"),
+                BorderLayout.SOUTH);
         setContentPane(content);
-        pitch.addKeyListener(this); pitch.addFocusListener(this); pitch.addMouseListener(this);
-        setDefaultCloseOperation(EXIT_ON_CLOSE); setSize(1360, 930); setLocationRelativeTo(null);
-        Sound.warmUp(); timer.start();
+        for (JButton b :
+                new JButton[] {
+                    host,
+                    roomToggle,
+                    join,
+                    leave,
+                    start,
+                    editor,
+                    phones,
+                    season,
+                    refresh,
+                    details,
+                    replay,
+                    profile,
+                    prev,
+                    next,
+                    historyPrev,
+                    historyNext
+                }) {
+            b.addActionListener(this);
+            b.setFocusable(false);
+        }
+        ready.addActionListener(this);
+        team.addActionListener(this);
+        chatInput.addActionListener(this);
+        ready.setFocusable(false);
+        team.setFocusable(false);
+        pitch.addKeyListener(this);
+        pitch.addFocusListener(this);
+        pitch.addMouseListener(this);
+        style(content);
+        brand.setFont(new Font("SansSerif", Font.BOLD, 18));
+        brand.setForeground(Pitch.GOLD);
+        status.setForeground(Pitch.MUTED);
+        room.setForeground(Pitch.MUTED);
+        for (JButton primary : new JButton[] {host, join, start}) {
+            primary.setBackground(Pitch.GOLD);
+            primary.setForeground(Pitch.BACK);
+        }
+        chatInput.setToolTipText("Type a message and press Enter");
+        setMinimumSize(new Dimension(1000, 650));
+        pack();
+        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+        setSize(Math.min(1320, screen.width - 50), Math.min(850, screen.height - 70));
+        setLocationRelativeTo(null);
+        offlineControls();
+        timer.start();
     }
-    public static void main(String[] args) { new LanBall().setVisible(true); }
-    // ---------- small builders for the dark game look
-    static JLabel label(String text, int size, Color colour) {
-        JLabel label = new JLabel(text);
-        label.setFont(new Font("Segoe UI", size >= 16 ? Font.BOLD : Font.PLAIN, size)); label.setForeground(colour);
-        return label;
+
+    static class Launch implements Runnable {
+        public void run() {
+            darkDefaults();
+            new LanBall().setVisible(true);
+        }
     }
-    static JTextField field(String text, int columns) {
-        JTextField field = new JTextField(text, columns);
-        style(field); field.setCaretColor(Color.WHITE);
-        return field;
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(new Launch());
     }
-    static void style(JComponent part) {
-        part.setBackground(PANEL); part.setForeground(Color.WHITE); part.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        part.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(0x2c3a75)),
-                BorderFactory.createEmptyBorder(4, 6, 4, 6)));
+
+    static void darkDefaults() {
+        for (String key :
+                new String[] {
+                    "Panel.background",
+                    "Viewport.background",
+                    "OptionPane.background",
+                    "TextField.background",
+                    "PasswordField.background",
+                    "TextArea.background",
+                    "List.background",
+                    "ComboBox.background",
+                    "TabbedPane.background",
+                    "Button.background",
+                    "Spinner.background"
+                }) UIManager.put(key, Pitch.PANEL);
+        for (String key :
+                new String[] {
+                    "Label.foreground",
+                    "OptionPane.messageForeground",
+                    "TextField.foreground",
+                    "PasswordField.foreground",
+                    "TextArea.foreground",
+                    "List.foreground",
+                    "ComboBox.foreground",
+                    "TabbedPane.foreground",
+                    "Button.foreground",
+                    "CheckBox.foreground"
+                }) UIManager.put(key, Pitch.TEXT);
+        UIManager.put("TextField.caretForeground", Pitch.GOLD);
+        UIManager.put("PasswordField.caretForeground", Pitch.GOLD);
+        UIManager.put("TextArea.caretForeground", Pitch.GOLD);
+        UIManager.put("List.selectionBackground", new Color(0x35536d));
+        UIManager.put("TabbedPane.selected", new Color(0x35536d));
+        UIManager.put("TabbedPane.contentAreaColor", Pitch.PANEL);
+        UIManager.put("TabbedPane.focus", Pitch.PANEL);
+        UIManager.put("TabbedPane.highlight", Pitch.PANEL);
+        UIManager.put("TabbedPane.light", Pitch.PANEL);
+        UIManager.put("TabbedPane.shadow", Pitch.PANEL);
+        UIManager.put("TabbedPane.darkShadow", Pitch.PANEL);
+        UIManager.put("TabbedPane.tabInsets", new Insets(10, 12, 10, 12));
+        UIManager.put("ComboBox.disabledForeground", Pitch.MUTED);
+        UIManager.put("ComboBox.disabledBackground", Pitch.PANEL);
     }
-    static JCheckBox check(String text) {
-        JCheckBox box = new JCheckBox(text);
-        box.setOpaque(false); box.setForeground(Color.WHITE); box.setFocusable(false); box.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        return box;
-    }
+
     static JTextArea area() {
-        JTextArea area = new JTextArea();
-        area.setEditable(false); area.setFocusable(false);
-        area.setBackground(new Color(0x10173a)); area.setForeground(TEXT); area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
-        area.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
-        return area;
+        JTextArea a = new JTextArea();
+        a.setEditable(false);
+        a.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        a.setMargin(new Insets(9, 9, 9, 9));
+        return a;
     }
-    static JScrollPane scroll(JTextArea area, int height) {
-        JScrollPane pane = new JScrollPane(area);
-        pane.setBorder(BorderFactory.createLineBorder(new Color(0x2c3a75)));
-        pane.setPreferredSize(new Dimension(430, height)); pane.setAlignmentX(LEFT_ALIGNMENT);
-        return pane;
+
+    static JPanel row(Component... parts) {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        for (Component c : parts) p.add(c);
+        return p;
     }
-    static JPanel row(Component... parts) { // varargs (Module 1): any number of parts in one left-aligned row
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 4));
-        row.setOpaque(false); row.setAlignmentX(LEFT_ALIGNMENT);
-        for (Component part : parts) row.add(part);
-        return row;
-    }
-    static JPanel column(Component... parts) { // parts stacked top to bottom
-        JPanel column = new JPanel();
-        column.setLayout(new BoxLayout(column, BoxLayout.Y_AXIS)); column.setOpaque(false);
-        for (Component part : parts) column.add(part);
-        return column;
-    }
-    static JPanel caption(String text, JComponent input) {
-        JPanel box = new JPanel(new BorderLayout(0, 2));
-        box.setOpaque(false); box.add(label(text, 12, Pitch.MUTED), BorderLayout.NORTH); box.add(input, BorderLayout.CENTER);
-        return box;
-    }
-    // Inheritance (Module 2): a JButton that paints itself as a rounded game button. Gold = main action.
-    static class GameButton extends JButton {
-        final boolean primary;
-        GameButton(String text, boolean primary, ActionListener listener) {
-            super(text);
-            this.primary = primary;
-            setContentAreaFilled(false); setBorderPainted(false); setFocusPainted(false); setFocusable(false);
-            setForeground(primary ? new Color(0x1a1300) : Color.WHITE); setFont(new Font("Segoe UI", Font.BOLD, 14));
-            setBorder(BorderFactory.createEmptyBorder(10, 22, 10, 22)); setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            addActionListener(listener);
+
+    static void style(Component c) {
+        c.setForeground(Pitch.TEXT);
+        c.setBackground(Pitch.PANEL);
+        if (!(c instanceof JTextArea)) c.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        if (c instanceof JCheckBox) ((JCheckBox) c).setOpaque(false);
+        if (c instanceof JTextField) ((JTextField) c).setCaretColor(Pitch.GOLD);
+        if (c instanceof JTextField)
+            ((JTextField) c)
+                    .setBorder(
+                            BorderFactory.createCompoundBorder(
+                                    BorderFactory.createLineBorder(new Color(0x354153)),
+                                    BorderFactory.createEmptyBorder(6, 8, 6, 8)));
+        if (c instanceof JButton) {
+            JButton b = (JButton) c;
+            b.setFocusPainted(false);
+            b.setBorder(
+                    BorderFactory.createCompoundBorder(
+                            BorderFactory.createLineBorder(new Color(0x3b4a5d)),
+                            BorderFactory.createEmptyBorder(5, 10, 5, 10)));
         }
-        protected void paintComponent(Graphics graphics) {
-            Graphics2D g = (Graphics2D) graphics.create();
-            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            Color top = new Color(primary ? 0xffe08a : 0x3d53a8), bottom = new Color(primary ? 0xf4a52a : 0x1b2452);
-            if (getModel().isRollover()) top = top.brighter();
-            if (getModel().isPressed()) top = bottom;
-            if (!isEnabled()) top = bottom = new Color(0x262c48);
-            g.setPaint(new GradientPaint(0, 0, top, 0, getHeight(), bottom));
-            g.fillRoundRect(0, 0, getWidth(), getHeight(), getHeight(), getHeight());
-            g.dispose();
-            super.paintComponent(graphics); // the text on top
-        }
+        if (c instanceof JScrollPane)
+            ((JScrollPane) c).setBorder(BorderFactory.createLineBorder(new Color(0x3b4a5d)));
+        if (c instanceof Container)
+            for (Component child : ((Container) c).getComponents()) style(child);
+        if (c instanceof Pitch) c.setBackground(Pitch.BACK);
     }
-    // A rounded dark panel for the player card.
-    static class Card extends JPanel {
-        Card(Component... parts) { super(new FlowLayout(FlowLayout.LEFT, 18, 8)); setOpaque(false); for (Component p : parts) add(p); }
-        protected void paintComponent(Graphics graphics) {
-            Graphics2D g = (Graphics2D) graphics.create();
-            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g.setColor(new Color(0x131a3a)); g.fillRoundRect(0, 0, getWidth(), getHeight(), 24, 24);
-            g.dispose();
-        }
-    }
-    // ---------- events (delegation event model: the source calls the listener method)
+
     public void actionPerformed(ActionEvent e) {
         Object source = e.getSource();
-        if (source == timer) { nextFrame(); return; }
-        Sound.CLICK.play();
-        if (source == host || source == join) connect(source == host);
-        if (source == leave) { disconnect(); status.setText("Disconnected."); }
-        if (source == start) startMatch();
-        if (source == team) { wantedTeam = team.getSelectedIndex(); ready.setSelected(false); } // a new team means "not ready"
-        if (source == sound) Sound.muted = !sound.isSelected();
-        if (source == chatInput) { say(chatInput.getText()); chatInput.setText(""); }
-        updateInput();
-        pitch.requestFocusInWindow(); // give the keys back to the game
-    }
-    public void keyPressed(KeyEvent e) { keys |= bit(e.getKeyCode()); updateInput(); }
-    public void keyReleased(KeyEvent e) { keys &= ~bit(e.getKeyCode()); updateInput(); }
-    public void focusLost(FocusEvent e) { keys = 0; updateInput(); } // no stuck keys after Alt-Tab
-    public void mousePressed(MouseEvent e) { pitch.requestFocusInWindow(); }
-    // An interface needs every method, so the events this game ignores get empty bodies.
-    public void keyTyped(KeyEvent e) { } public void focusGained(FocusEvent e) { } public void mouseClicked(MouseEvent e) { }
-    public void mouseReleased(MouseEvent e) { } public void mouseEntered(MouseEvent e) { } public void mouseExited(MouseEvent e) { }
-
-    // Input bits: left 1, right 2, up 4, down 8, kick 16, ready 32.
-    static int bit(int code) {
-        switch (code) {
-            case KeyEvent.VK_A: case KeyEvent.VK_LEFT: return 1;
-            case KeyEvent.VK_D: case KeyEvent.VK_RIGHT: return 2;
-            case KeyEvent.VK_W: case KeyEvent.VK_UP: return 4;
-            case KeyEvent.VK_S: case KeyEvent.VK_DOWN: return 8;
-            case KeyEvent.VK_SPACE: return 16;
-            default: return 0;
+        if (source == timer) {
+            nextFrame();
+            return;
         }
+        try {
+            if (source == roomToggle) {
+                tabs.setVisible(!tabs.isVisible());
+                roomToggle.setText(tabs.isVisible() ? "Hide room" : "Show room");
+                revalidate();
+            }
+            if (source == host || source == join) connect(source == host);
+            if (source == leave) {
+                disconnect();
+                notice("Disconnected.");
+            }
+            if (source == start) {
+                notice(
+                        server.startRound(
+                                Integer.parseInt(seconds.getText().trim()),
+                                Integer.parseInt(target.getText().trim())));
+            }
+            if (source == team && !updating) {
+                ready.setSelected(false);
+                synchronized (this) {
+                    pendingTeam = team.getSelectedIndex();
+                }
+            }
+            if (source == chatInput) {
+                synchronized (this) {
+                    outgoingChat = Files.clean(chatInput.getText(), 80);
+                }
+                chatInput.setText("");
+            }
+            if (source == refresh) queue("HISTORY\t" + historyPage);
+            if (source == historyPrev || source == historyNext) {
+                historyPage = Math.max(0, historyPage + (source == historyPrev ? -1 : 1));
+                queue("HISTORY\t" + historyPage);
+            }
+            if (source == prev || source == next) {
+                leaguePage = Math.max(0, leaguePage + (source == prev ? -1 : 1));
+                queue("LEAGUE\t" + leaguePage);
+            }
+            if (source == profile) queue("PROFILE\t" + myName);
+            if (source == details || source == replay) {
+                String selected = historyList.getSelectedValue();
+                if (selected == null) {
+                    notice("Select a match in History first.");
+                    return;
+                }
+                String id = selected.split(" \\| ")[0];
+                queue(
+                        (source == details ? "DETAIL\t" : "REPLAY\t")
+                                + id
+                                + (source == replay ? "\t0" : ""));
+            }
+            if (source == editor) {
+                PitchEditor dialog = new PitchEditor(this, server.match.arena);
+                dialog.setVisible(true);
+                if (dialog.selected != null) {
+                    server.useArena(dialog.selected);
+                    notice("Pitch saved and selected: " + dialog.selected.name);
+                }
+            }
+            if (source == season) {
+                String choice =
+                        JOptionPane.showInputDialog(
+                                this,
+                                "Season name (existing results stay saved):",
+                                server.league.season);
+                if (choice != null) server.useSeason(choice.trim());
+            }
+            if (source == phones && server != null) {
+                JTextArea links = area();
+                links.setText(phoneLinks());
+                links.setEditable(false);
+                JOptionPane.showMessageDialog(
+                        this, links, "Join from iPhone or Android", JOptionPane.PLAIN_MESSAGE);
+            }
+        } catch (NumberFormatException error) {
+            notice("Enter whole numbers for seconds and goals.");
+        } catch (IOException error) {
+            notice(error.getMessage());
+        }
+        updateControls();
+        pitch.requestFocusInWindow();
     }
-    // The network thread reads these values, so every read and write goes through a synchronized method.
-    synchronized void updateInput() { controls = keys | (ready.isSelected() ? 32 : 0); }
-    synchronized int controls() { return controls; }
-    synchronized void say(String text) { outgoingChat = text; }
-    synchronized String takeChat() { String text = outgoingChat; outgoingChat = ""; return text; }
-    synchronized void deliver(int owner, String frame, String linkedText, String error) {
-        if (owner != generation) return; // a message from an old connection
-        if (frame != null) incoming = frame;
-        if (linkedText != null) linked = linkedText;
-        if (error != null) failure = error;
-    }
-    synchronized boolean adopt(int owner, Server created, Socket connection) throws IOException {
-        if (owner != generation) { if (created != null) created.close(); connection.close(); return false; }
-        if (created != null) server = created;
-        socket = connection; return true;
 
+    void notice(String text) {
+        status.setText(text);
+        noticeUntil = System.nanoTime() + 4000000000L;
     }
-    void startMatch() {
-        try { status.setText(server.startRound(Integer.parseInt(seconds.getText().trim()), Integer.parseInt(target.getText().trim()))); }
-        catch (NumberFormatException error) { JOptionPane.showMessageDialog(this, "Enter whole numbers for Seconds and First to."); }
+
+    synchronized void queue(String command) {
+        if (connected && commands.size() < 20) commands.add(command);
     }
+
+    void offlineControls() {
+        host.setEnabled(true);
+        join.setEnabled(true);
+        leave.setEnabled(false);
+        start.setEnabled(false);
+        editor.setEnabled(false);
+        season.setEnabled(false);
+        phones.setEnabled(false);
+        team.setEnabled(true);
+        ready.setEnabled(false);
+    }
+
     void connect(boolean hosting) {
-        String secret = new String(pin.getPassword());
-        if (!secret.matches("[0-9]{6,12}")) { status.setText("The PIN must be 6-12 digits."); return; }
-        disconnect();
-        String hello = "LB7\t" + name.getText() + "\t" + club.getText() + "\t" + shirt.getText() + "\t"
-                + (create.isSelected() ? "create" : "login");
-        Link link = new Link(hosting, hosting ? "127.0.0.1" : address.getText().trim(), secret, hello);
-        host.setEnabled(false); join.setEnabled(false); status.setText("Connecting...");
-        pitch.me = name.getText().trim();
-        Server.background(link);
-    }
-    // Talks to the host on its own thread, so the window never waits for the network.
-    class Link implements Runnable {
-        final boolean hosting; final String destination, secret, hello; final int owner = generation;
-        Link(boolean hosting, String destination, String secret, String hello) {
-            this.hosting = hosting; this.destination = destination; this.secret = secret; this.hello = hello;
+        char[] secret = password.getPassword();
+        if (secret.length < 6 || secret.length > 40) {
+            Arrays.fill(secret, '\0');
+            notice("Use a password of 6-40 characters.");
+            return;
         }
+        if (!Accounts.validName(name.getText().trim())
+                || !club.getText().trim().matches("[A-Za-z0-9 _-]{2,24}")
+                || !shirt.getText().matches("[1-9][0-9]?")) {
+            Arrays.fill(secret, '\0');
+            notice("Name: 2-16 letters/digits, club: 2-24, shirt: 1-99.");
+            return;
+        }
+        disconnect();
+        myName = name.getText().trim();
+        synchronized (this) {
+            link =
+                    new Link(
+                            hosting,
+                            hosting ? "127.0.0.1" : address.getText().trim(),
+                            "LB9\t"
+                                    + myName
+                                    + "\t"
+                                    + club.getText().trim()
+                                    + "\t"
+                                    + shirt.getText()
+                                    + "\t"
+                                    + (create.isSelected() ? "create" : "login"),
+                            secret);
+        }
+        host.setEnabled(false);
+        join.setEnabled(false);
+        leave.setEnabled(true);
+        notice("Connecting...");
+        Server.start(link);
+    }
+
+    synchronized void disconnect() {
+        Link old = link;
+        link = null;
+        if (old != null) old.stop();
+        if (server != null) server.close();
+        server = null;
+        connected = false;
+        Arrays.fill(down, false);
+        controls = 0;
+        pendingTeam = -1;
+        incoming = failure = null;
+        outgoingChat = "";
+        commands.clear();
+        responses.clear();
+        downloaded = null;
+        pitch.clear();
+        chatLog.setText("");
+        league.setText("");
+        historyModel.clear();
+        profileText.setText("");
+        ready.setSelected(false);
+        room.setText(" ");
+        connection.setVisible(true);
+        offlineControls();
+    }
+
+    synchronized void updateControls() {
+        controls = 0;
+        if (down[KeyEvent.VK_A] || down[KeyEvent.VK_LEFT]) controls |= 1;
+        if (down[KeyEvent.VK_D] || down[KeyEvent.VK_RIGHT]) controls |= 2;
+        if (down[KeyEvent.VK_W] || down[KeyEvent.VK_UP]) controls |= 4;
+        if (down[KeyEvent.VK_S] || down[KeyEvent.VK_DOWN]) controls |= 8;
+        if (down[KeyEvent.VK_SPACE]) controls |= 16;
+        if (ready.isSelected()) controls |= 32;
+    }
+
+    void setKey(int code, boolean held) {
+        if (code >= 0 && code < down.length) {
+            down[code] = held;
+            updateControls();
+        }
+    }
+
+    public void keyPressed(KeyEvent e) {
+        setKey(e.getKeyCode(), true);
+    }
+
+    public void keyReleased(KeyEvent e) {
+        setKey(e.getKeyCode(), false);
+    }
+
+    public void focusLost(FocusEvent e) {
+        Arrays.fill(down, false);
+        updateControls();
+    }
+
+    public void focusGained(FocusEvent e) {}
+
+    public void keyTyped(KeyEvent e) {}
+
+    public void mousePressed(MouseEvent e) {
+        pitch.requestFocusInWindow();
+    }
+
+    public void mouseClicked(MouseEvent e) {}
+
+    public void mouseReleased(MouseEvent e) {}
+
+    public void mouseEntered(MouseEvent e) {}
+
+    public void mouseExited(MouseEvent e) {}
+
+    class Link implements Runnable {
+        final boolean hosting;
+        final String destination, hello;
+        final char[] secret;
+        final Socket socket = new Socket();
+        ByteArrayOutputStream replayBytes;
+        String replayId;
+
+        Link(boolean hosting, String destination, String hello, char[] secret) {
+            this.hosting = hosting;
+            this.destination = destination;
+            this.hello = hello;
+            this.secret = secret;
+        }
+
         public void run() {
             try {
-                Server created = hosting ? new Server(new File(System.getProperty("lanball.data", "lanball-v4-data")), Server.PORT)
-                        : null;
-                Socket connection = new Socket();
-                if (!adopt(owner, created, connection)) return;
-                connection.connect(new InetSocketAddress(destination, Server.PORT), 5000);
-                connection.setSoTimeout(8000); connection.setTcpNoDelay(true);
-                DataInputStream in = new DataInputStream(connection.getInputStream());
-                DataOutputStream out = new DataOutputStream(connection.getOutputStream());
+                if (hosting) {
+                    Server created =
+                            new Server(
+                                    new File(System.getProperty("lanball.data", "lanball-data")),
+                                    Server.PORT);
+                    synchronized (LanBall.this) {
+                        if (link != this) {
+                            created.close();
+                            return;
+                        }
+                        server = created;
+                        server.enableMobile();
+                    }
+                }
+                socket.connect(new InetSocketAddress(destination, Server.PORT), 5000);
+                socket.setSoTimeout(8000);
+                socket.setTcpNoDelay(true);
+                DataInputStream in = new DataInputStream(socket.getInputStream());
+                DataOutputStream out =
+                        new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
                 out.writeUTF(hello);
-                String[] challenge = in.readUTF().split("\t"); // salt, nonce, new/old -- or an error
+                out.flush();
+                String[] challenge = in.readUTF().split("\t");
                 if (challenge.length != 3) throw new IOException(challenge[0]);
-                String verifier = Server.verifier(secret, challenge[0]);
-                out.writeUTF(challenge[2].equals("new") ? verifier : Server.proof(verifier, challenge[1]));
+                String verifier = Accounts.verifier(secret, challenge[0]);
+                out.writeUTF(
+                        challenge[2].equals("new")
+                                ? verifier
+                                : Accounts.proof(verifier, challenge[1]));
+                out.flush();
                 String answer = in.readUTF();
                 if (!answer.equals("OK")) throw new IOException(answer);
-                deliver(owner, null, hosting ? addresses() : "Connected to " + destination, null);
-                while (true) {
-                    out.writeInt(controls()); out.writeInt(wantedTeam); out.writeUTF(takeChat());
-                    deliver(owner, in.readUTF(), null, null);
-                    Thread.sleep(25); // about 30 updates a second
+                synchronized (LanBall.this) {
+                    if (link != this) return;
+                    responses.add(
+                            "CONNECTED\n"
+                                    + (hosting
+                                            ? addresses() + " | " + server.mobileStatus
+                                            : "Joined " + destination));
+                    connected = true;
+                    commands.add("HISTORY\t0");
+                    commands.add("PROFILE\t" + myName);
                 }
-            } catch (Exception error) { deliver(owner, null, null, "Connection ended: " + error.getMessage()); }
-        }
-    }
-    static String addresses() throws SocketException {
-        String ips = "";
-        Enumeration<NetworkInterface> networks = NetworkInterface.getNetworkInterfaces();
-        while (networks.hasMoreElements()) {
-            Enumeration<InetAddress> list = networks.nextElement().getInetAddresses();
-            while (list.hasMoreElements()) {
-                InetAddress ip = list.nextElement();
-                if (ip.getAddress().length == 4 && !ip.isLoopbackAddress()) ips += " / " + ip.getHostAddress(); // IPv4 only
+                while (true) {
+                    int keys, wanted;
+                    String command, chat;
+                    synchronized (LanBall.this) {
+                        if (link != this) return;
+                        keys = controls;
+                        wanted = pendingTeam;
+                        pendingTeam = -1;
+                        command = commands.isEmpty() ? "" : commands.remove(0);
+                        chat = outgoingChat;
+                        outgoingChat = "";
+                    }
+                    out.writeInt(keys);
+                    out.writeInt(wanted);
+                    out.writeUTF(command);
+                    out.writeUTF(chat);
+                    out.flush();
+                    String frame = in.readUTF(), reply = in.readUTF();
+                    synchronized (LanBall.this) {
+                        if (link != this) return;
+                        incoming = frame;
+                    }
+                    if (reply.startsWith("REPLAY\t")) download(reply);
+                    else if (!reply.isEmpty())
+                        synchronized (LanBall.this) {
+                            if (link == this) responses.add(reply);
+                        }
+                    Thread.sleep(16);
+                }
+            } catch (Exception e) {
+                synchronized (LanBall.this) {
+                    if (link == this) failure = "Connection ended: " + e.getMessage();
+                }
+            } finally {
+                Arrays.fill(secret, '\0');
+                Server.quietClose(socket);
             }
         }
-        return "Friends on the same Wi-Fi join with " + (ips.length() > 0 ? ips.substring(3) : "this computer's IP address")
-                + " (port " + Server.PORT + ")";
-    }
-    // Runs on the Swing timer: take the newest snapshot from the network thread, then animate the pitch.
-    void nextFrame() {
-        String frame, link, error;
-        synchronized (this) { frame = incoming; link = linked; error = failure; incoming = linked = failure = null; }
-        if (link != null) { connection.setVisible(false); start.setEnabled(server != null); hostAddress.setText(link); }
-        if (frame != null) show(frame);
-        if (error != null) { disconnect(); status.setText(error); }
-        long now = System.nanoTime();
-        pitch.step(Math.min(.05, (now - lastFrame) / 1e9)); lastFrame = now;
-    }
-    // Reads one host snapshot: the pitch draws the match; this method updates the panels and the player card.
-    void show(String frame) {
-        pitch.read(frame);
-        String chat = "", table = String.format(ROW, "#", "Player", "Lv", "P", "W", "D", "Gls", "Pts", "Elo", "Best");
-        int rank = 0;
-        for (String row : frame.split("\n")) {
-            String[] cells = row.split("\t");
-            if (cells[0].equals("M") && !status.getText().equals(cells[1])) status.setText(cells[1]);
-            if (cells[0].equals("C")) chat += cells[1] + "\n";
-            if (!cells[0].equals("L") || cells.length < 11) continue;
-            int[] s = new int[9];
-            for (int i = 0; i < 9; i++) s[i] = Integer.parseInt(cells[i + 2]);
-            int xp = Server.xp(s);
-            table += String.format(ROW, ++rank, cells[1], Server.level(xp), s[0], s[1], s[2], s[3], s[4], s[5], s[8]);
-            if (cells[1].equalsIgnoreCase(pitch.me)) playerCard(s, xp);
+
+        void download(String reply) throws IOException {
+            String[] p = reply.split("\t", -1);
+            int offset = Integer.parseInt(p[2]), total = Integer.parseInt(p[3]);
+            if (total < 1 || total > Replay.LIMIT) throw new IOException("Invalid replay size.");
+            if (offset == 0) {
+                replayId = p[1];
+                replayBytes = new ByteArrayOutputStream();
+            }
+            if (!p[1].equals(replayId) || offset != replayBytes.size())
+                throw new IOException("Incomplete replay transfer.");
+            byte[] chunk = Base64.getDecoder().decode(p[4]);
+            replayBytes.write(chunk);
+            if (replayBytes.size() > total) throw new IOException("Invalid replay chunk.");
+            if (replayBytes.size() == total) {
+                Replay result = Replay.read(replayBytes.toByteArray());
+                synchronized (LanBall.this) {
+                    if (link == this) {
+                        downloaded = result;
+                        responses.add("REPLAY_READY\n" + replayId);
+                    }
+                }
+                replayBytes = null;
+            } else
+                synchronized (LanBall.this) {
+                    if (link == this)
+                        commands.add(0, "REPLAY\t" + replayId + "\t" + replayBytes.size());
+                }
         }
-        String phase = pitch.phase;
-        if (previousPhase.equals("Playing") && !phase.equals("Playing")) ready.setSelected(false);
-        if (!previousPhase.equals("Playing") && phase.equals("Playing")) xpAtKickoff = Math.max(0, myXp);
-        if (!previousPhase.equals("Result") && phase.equals("Result")) pitch.reward = "+" + (myXp - xpAtKickoff) + " XP";
-        previousPhase = phase;
-        updateInput();
-        team.setEnabled(!phase.equals("Playing") && !phase.equals("Save failed"));
-        if (!chatLog.getText().equals(chat.trim())) chatLog.setText(chat.trim());
-        if (!league.getText().equals(table)) league.setText(table);
+
+        void stop() {
+            Server.quietClose(socket);
+        }
     }
-    // The player card: level, XP to the next level, results, win streak and badges. Progress you can see is the main reward.
-    void playerCard(int[] s, int xp) {
-        int lv = Server.level(xp), from = 50 * (lv - 1) * (lv - 1), to = 50 * lv * lv;
-        if (myXp >= 0 && lv > Server.level(myXp)) Sound.LEVEL_UP.play();
-        myXp = xp;
-        level.setText("Lv " + lv);
-        xpBar.setValue(1000 * (xp - from) / (to - from));
-        progress.setText(xp + " / " + to + " XP");
-        results.setText(s[1] + "W " + s[2] + "D " + (s[0] - s[1] - s[2]) + "L   Elo " + s[5] + (s[7] >= 2 ? "   Streak " + s[7] : ""));
-        String earned = ""; int count = 0;
-        for (int b = 0; b < Server.BADGES.length; b++)
-            if ((s[6] & 1 << b) != 0) { earned += "<br>" + Server.BADGES[b]; count++; }
-        badges.setText("Badges " + count + "/" + Server.BADGES.length);
-        badges.setToolTipText(count == 0 ? "No badges yet" : "<html>" + earned.substring(4) + "</html>");
+
+    String phoneLinks() throws SocketException {
+        if (server.mobile == null) return server.mobileStatus;
+        String text =
+                "1. Connect the phone to the same Wi-Fi as this laptop.\n"
+                        + "2. Open Safari or Chrome and enter one of these addresses:\n\n";
+        for (String ip : lanAddresses())
+            text += "http://" + ip + ":" + server.mobile.port() + "/\n";
+        return text
+                + "\n3. Join, choose a team and mark Ready.\n"
+                + "The laptop host starts the match. Rotate the phone to landscape.\n"
+                + "If blocked, allow Java on Private networks in Windows Firewall.\n"
+                + "A laptop hotspot also works if campus Wi-Fi isolates devices.";
     }
-    synchronized void disconnect() {
-        generation++;
-        try { if (socket != null) socket.close(); } catch (IOException ignored) { }
-        if (server != null) server.close();
-        server = null; socket = null; keys = 0; previousPhase = ""; incoming = linked = failure = null; // drop old messages
-        ready.setSelected(false); updateInput();
-        host.setEnabled(true); join.setEnabled(true); start.setEnabled(false); team.setEnabled(true);
-        connection.setVisible(true); pitch.reset(); hostAddress.setText(" ");
+
+    static String addresses() throws SocketException {
+        String text = "Host IP: ";
+        for (String ip : lanAddresses()) text += ip + "  ";
+        return text + " | Port " + Server.PORT;
+    }
+
+    /**
+     * IPv4 addresses another device could reach. WSL/Hyper-V and VM adapters are skipped because a
+     * phone can never reach them, but the Windows hotspot adapter (also "virtual") is kept.
+     */
+    static ArrayList<String> lanAddresses() throws SocketException {
+        ArrayList<String> found = new ArrayList<String>();
+        Enumeration<NetworkInterface> adapters = NetworkInterface.getNetworkInterfaces();
+        while (adapters.hasMoreElements()) {
+            NetworkInterface adapter = adapters.nextElement();
+            String label = (adapter.getDisplayName() + " " + adapter.getName()).toLowerCase();
+            if (!adapter.isUp()
+                    || label.contains("vethernet")
+                    || label.contains("hyper-v")
+                    || label.contains("wsl")
+                    || label.contains("vmware")
+                    || label.contains("virtualbox")) continue;
+            Enumeration<InetAddress> list = adapter.getInetAddresses();
+            while (list.hasMoreElements()) {
+                InetAddress ip = list.nextElement();
+                if (ip instanceof Inet4Address
+                        && !ip.isLoopbackAddress()
+                        && !ip.isLinkLocalAddress()) found.add(ip.getHostAddress());
+            }
+        }
+        return found;
+    }
+
+    void nextFrame() {
+        if (!isDisplayable()) {
+            timer.stop();
+            disconnect();
+            return;
+        }
+        String frame, error;
+        Vector<String> replies = new Vector<String>();
+        synchronized (this) {
+            frame = incoming;
+            error = failure;
+            incoming = failure = null;
+            replies.addAll(responses);
+            responses.clear();
+        }
+        if (error != null) {
+            disconnect();
+            notice(error);
+            return;
+        }
+        if (frame != null)
+            try {
+                show(frame);
+            } catch (RuntimeException invalid) {
+                notice("Skipped an invalid game update.");
+            }
+        for (String reply : replies) {
+            int newline = reply.indexOf('\n');
+            String type = newline < 0 ? reply : reply.substring(0, newline),
+                    text = newline < 0 ? "" : reply.substring(newline + 1);
+            if (type.equals("CONNECTED")) {
+                create.setSelected(false);
+                connection.setVisible(false);
+                room.setText(text);
+                ready.setEnabled(true);
+                start.setEnabled(server != null);
+                editor.setEnabled(server != null);
+                season.setEnabled(server != null);
+                phones.setEnabled(server != null);
+                notice("Connected. Choose a team and mark Ready.");
+            }
+            if (type.equals("HISTORY")) {
+                historyModel.clear();
+                for (String line : text.split("\n"))
+                    if (!line.isEmpty()) historyModel.addElement(line);
+            }
+            if (type.equals("PROFILE")) profileText.setText(text);
+            if (type.equals("DETAIL")) {
+                JTextArea a = area();
+                a.setText(text);
+                JScrollPane pane = new JScrollPane(a);
+                pane.setPreferredSize(new Dimension(620, 240));
+                JOptionPane.showMessageDialog(
+                        this, pane, "Match summary", JOptionPane.PLAIN_MESSAGE);
+            }
+            if (type.equals("ERROR")) notice(text);
+            if (type.equals("REPLAY_READY")) {
+                Replay r;
+                synchronized (this) {
+                    r = downloaded;
+                    downloaded = null;
+                }
+                if (r != null) new ReplayWindow(r, text).setVisible(true);
+            }
+        }
+        long now = System.nanoTime();
+        pitch.animate(Math.min(.05, (now - lastFrame) / 1e9));
+        lastFrame = now;
+    }
+
+    void show(String frame) {
+        String before = pitch.phase;
+        pitch.read(frame, myName);
+        StringBuilder chat = new StringBuilder(), table = new StringBuilder();
+        table.append("Player          Elo  W D L  G A\n");
+        for (String line : frame.split("\n")) {
+            String[] c = line.split("\t", -1);
+            if (c[0].equals("C")) chat.append(c[1]).append('\n');
+            if (c[0].equals("M") && System.nanoTime() > noticeUntil) status.setText(c[1]);
+            if (c[0].equals("N")) notice(c[1]);
+            if (c[0].equals("S")) table.insert(0, c[1] + " | page " + (leaguePage + 1) + "\n\n");
+            if (c[0].equals("L"))
+                table.append(
+                        String.format(
+                                "%-14s %4s %2s %2s %2s %2s %2s%n",
+                                c[1], c[9], c[3], c[4], c[5], c[6], c[7]));
+        }
+        if (!chatLog.getText().equals(chat.toString())) chatLog.setText(chat.toString());
+        if (!league.getText().equals(table.toString())) league.setText(table.toString());
+        Pitch.Dot mine = pitch.mine();
+        synchronized (this) {
+            if (mine != null && pendingTeam < 0 && team.getSelectedIndex() != mine.team) {
+                updating = true;
+                team.setSelectedIndex(mine.team);
+                updating = false;
+            }
+        }
+        boolean locked = pitch.phase.equals("Playing") || pitch.phase.equals("Save failed");
+        team.setEnabled(!locked);
+        editor.setEnabled(server != null && !locked);
+        season.setEnabled(server != null && !locked);
+        start.setText(pitch.phase.equals("Save failed") ? "Retry save" : "Start match");
+        if (before.equals("Playing") && !pitch.phase.equals("Playing")) {
+            ready.setSelected(false);
+            queue("HISTORY\t0");
+            queue("PROFILE\t" + myName);
+        }
+        updateControls();
     }
 }

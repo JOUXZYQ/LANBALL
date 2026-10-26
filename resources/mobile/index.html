@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#10151f">
+  <title>LanBall · Play</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/game.js" defer></script>
+</head>
+<body>
+  <main id="game">
+    <header><strong>LANBALL<span>LOCAL PLAY</span></strong><div id="score">0 : 0</div><button id="menuButton" aria-label="Open match menu">Menu</button></header>
+    <div id="status" role="status">Join the laptop's match. Same Wi-Fi, same pitch.</div>
+    <section class="stage" aria-label="Football pitch and controls">
+      <div class="pad"><div id="stick" role="group" aria-label="Drag to move"><span id="thumb"></span><small>MOVE</small></div></div>
+      <canvas id="pitch" width="1000" height="580" aria-label="Live football match"></canvas>
+      <div class="kickArea"><button id="kick" aria-label="Tap or hold to kick">KICK</button><span>Tap or hold</span></div>
+    </section>
+    <footer><span id="identity">Phone + desktop multiplayer</span><span id="clock">Rotate for a wider pitch</span></footer>
+  </main>
+  <section id="login" class="overlay">
+    <form id="joinForm" class="sheet">
+      <p class="eyebrow">LAN FOOTBALL · v9</p><h1>Your team.<br>Your phone.</h1>
+      <p class="muted">Join the match hosted on this laptop.</p>
+      <label>Player name<input id="name" autocomplete="username" pattern="[A-Za-z0-9_\-]{2,16}" maxlength="16" required placeholder="Your name"></label>
+      <label>Password<input id="password" type="password" autocomplete="current-password" minlength="6" maxlength="40" required placeholder="At least 6 characters"></label>
+      <div class="pair"><label>Club<input id="club" value="College" maxlength="24" required></label><label>Shirt<input id="shirt" type="number" min="1" max="99" value="7" required></label></div>
+      <label class="check"><input id="create" type="checkbox" checked>Create account on this host</label>
+      <button id="joinButton" type="submit" class="primary">Join the pitch</button>
+      <p id="loginError" role="alert"></p>
+      <small class="muted">For a trusted local network. Use a demo password, not a personal one.</small>
+    </form>
+  </section>
+  <section id="menu" class="overlay" hidden>
+    <div class="sheet">
+      <div class="menuTitle"><h2>Match room</h2><button id="closeMenu">Back to pitch</button></div>
+      <div class="pair"><label>Team<select id="team"><option value="0">Red</option><option value="1">Blue</option><option value="2" selected>Watch</option></select></label><label class="check"><input id="ready" type="checkbox">Ready</label></div>
+      <p id="roster" class="muted">Choose a team and mark Ready. The laptop host starts the match.</p>
+      <form id="chatForm" class="pair"><input id="chat" maxlength="80" placeholder="Message the room" aria-label="Chat message"><button>Send</button></form>
+      <pre id="messages"></pre>
+      <details><summary>Season standings</summary><pre id="league"></pre></details>
+      <details id="profileDetails"><summary>My profile</summary><pre id="profile"></pre></details>
+      <button id="leave">Leave match</button>
+    </div>
+  </section>
+</body>
+</html>

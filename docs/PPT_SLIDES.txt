@@ -1,0 +1,442 @@
+============================================================================================
+LANBALL v9 - PRESENTATION SLIDES (16 slides, 10 minutes, 5 speakers)
+============================================================================================
+
+Order: Krishnadas (1-3) -> Hari (4-6) -> Ritvik (7-9) -> Allen Joji (10-12) -> Allen Shibu (13-16),
+then the live demo (Ritvik hosts) and questions (Krishnadas leads).
+
+============================================================================================
+SLIDE 1 / 16  -  TITLE
+Speaker: Krishnadas    Time: 0:00-0:20
+--------------------------------------------------------------------------------------------
+
+ON THE SLIDE:
+  Title slide.
+  Big title: LanBall
+  Subtitle: Football on the college LAN
+  Small line at the bottom: Krishnadas · Hari · Ritvik · Allen Joji · Allen Shibu — KTU
+    OOP project
+
+  Background: the attached GOAL screenshot (05-goal.png) faded to about 25 % behind the
+    text. If no image is attached, draw a thin-line top-down football pitch with one red
+    circle, one blue circle and a small white ball.
+
+SAY (Slide 1, first paragraph (greeting)):
+  Good morning. We are Krishnadas, Hari, Ritvik, Allen Joji and Allen Shibu, and our
+  project is LanBall, a two-dimensional football game for the college network. Each player
+  is a circle. You push the ball and kick it into the other goal. You can learn it in one
+  minute, but passing and positioning still matter.
+
+============================================================================================
+SLIDE 2 / 16  -  WHY WE BUILT IT
+Speaker: Krishnadas    Time: 0:20-1:00
+--------------------------------------------------------------------------------------------
+
+ON THE SLIDE:
+  Title: Why we built it
+
+  Left, small heading "The brief", three short lines, each with a simple line icon:
+  - Lots of input from the user
+  - Lots of data stored permanently
+  - Process input + stored data into output
+
+  Right, small heading "LanBall", three matching lines:
+  - Every key press, chat and pitch design
+  - Accounts, matches, replays, pitches in files
+  - Physics, Elo league, profiles, replays
+
+  Bottom, in yellow: One Java JAR. Laptops and phones on the same Wi-Fi. No internet
+    needed.
+
+SAY (Slide 1, rest):
+  Our brief had three conditions: lots of input from the user, lots of data stored
+  permanently, and processing both into useful output. We wanted a project that meets all
+  three and that friends can actually play: a quick football match for anyone on the same
+  Wi-Fi.
+
+  LanBall is one Java JAR. Laptops need Java, phones only need a browser, and nothing
+  needs the internet. Key presses are the input, every match is saved to files, and the
+  host turns them into physics, an Elo league and replays. All eleven promised functions
+  work, and at the end we show it live.
+
+============================================================================================
+SLIDE 3 / 16  -  ONE HOST DECIDES
+Speaker: Krishnadas    Time: 1:00-2:00
+--------------------------------------------------------------------------------------------
+
+ON THE SLIDE:
+  Title: One host decides everything
+
+  The whole slide is one network diagram. Centre box: "Host laptop — Server + Match (rules
+    and physics)". Left: two "Laptop" boxes, arrows labelled "TCP 45888". Right: two
+    "Phone (browser)" boxes, arrows labelled "HTTP 45890". Arrows into the host labelled
+    "5 key bits: ← → ↑ ↓ kick". Arrows out of the host labelled "snapshot: positions +
+    score".
+
+  One line at the bottom in yellow: Clients only draw. A changed client cannot invent a
+    goal.
+  Small line under it: Accounts live on the host: salted password hash, challenge login.
+
+SAY (Slide 2):
+  This is the design. One laptop clicks Host. That laptop is now the server, and it is
+  also a player. Other laptops type the host IP and click Join, over TCP on port 45888. A
+  phone needs no app: it opens the Phones address in Safari or Chrome, over HTTP on port
+  45890.
+
+  The host is authoritative. Only the host decides where players are, when a goal is
+  scored and what the result is. Every client sends only five bits: left, right, up, down
+  and kick. The host simulates the match and sends back a snapshot of the positions and
+  the score. So every screen shows the same match, and a changed client cannot invent a
+  goal.
+
+  Accounts also live on the host. We never store a password, only a salted PBKDF2 hash,
+  and a laptop proves its password with a challenge. Now Hari explains the window and how
+  it shows the game.
+
+============================================================================================
+SLIDE 4 / 16  -  THE MAIN WINDOW
+Speaker: Hari    Time: 2:00-2:40
+--------------------------------------------------------------------------------------------
+
+ON THE SLIDE:
+  Title: The main window is a JFrame
+
+  Left: if the screenshot 02-lobby.png is attached, show it large with thin yellow
+    outlines and small labels on: "text fields", "password box", "tick boxes", "team drop-
+    down", "buttons", "tabs".
+
+  Right, a small code-style box:
+  class LanBall extends JFrame
+    implements ActionListener, KeyListener,
+               FocusListener, MouseListener
+
+  Under it, one line: 16 buttons · 4 tabs: Chat, League, History, Profile
+
+SAY (Slide 3, first two paragraphs):
+  My part is the window you see. LanBall extends JFrame, so it is a window, and it
+  implements four listener interfaces, so Swing can tell it about clicks, keys, focus and
+  the mouse.
+
+  The constructor creates the controls: text boxes for name, host IP, club and shirt, a
+  password box, tick boxes for Create account and Ready, a team drop-down, sixteen
+  buttons, and four tabs for chat, league, history and profile. Layout managers place
+  them. The whole window is a BorderLayout: the rows on top, the pitch in the centre, the
+  tabs on the right. Each row is a FlowLayout made by one helper, row, which takes any
+  number of components through varargs.
+
+============================================================================================
+SLIDE 5 / 16  -  ONE METHOD FOR EVERY CLICK
+Speaker: Hari    Time: 2:40-3:00
+--------------------------------------------------------------------------------------------
+
+ON THE SLIDE:
+  Title: Layouts place it. One method handles every click.
+
+  Left: a simple wireframe of the window as four regions: NORTH "rows of controls", CENTER
+    "pitch", EAST "tabs", SOUTH "help line". Label: BorderLayout. Inside NORTH, show three
+    thin rows labelled "FlowLayout — row(Component... parts)".
+
+  Right: a flow of three boxes with arrows: "button clicked" → "actionPerformed(e)" →
+    "e.getSource() picks the action".
+
+SAY (Slide 3, rest):
+  Every button registers the window as its listener, so one method, actionPerformed,
+  handles all clicks, and getSource tells it which button was pressed.
+
+============================================================================================
+SLIDE 6 / 16  -  FROM SNAPSHOT TO SCREEN
+Speaker: Hari    Time: 3:00-4:00
+--------------------------------------------------------------------------------------------
+
+ON THE SLIDE:
+  Title: From snapshot to screen
+
+  One horizontal pipeline of five boxes with arrows:
+  "Swing Timer, 16 ms" → "nextFrame()" → "show(frame)" → "Pitch.read(frame)" → "repaint()
+    → paintComponent"
+
+  Below it, a small monospace example of a snapshot, three lines:
+  H  Playing  95  1  0  480  270  0  5
+  P  Hari  0  240  150  true  true  7  1  0
+  G  1  0  RED GOAL - Hari
+
+  One line at the bottom in yellow: Rows split by newline, fields by tab. The window never
+    decides the game.
+
+SAY (Slide 4):
+  The window never decides the game. A network thread receives the host's snapshot, and a
+  Swing timer fires every 16 milliseconds, about sixty times a second. On each tick,
+  nextFrame takes the newest snapshot, and show passes it to the pitch.
+
+  A snapshot is plain text: one line per item, fields separated by tabs. The H line is the
+  header: phase, time, score and ball position. Each P line is one player. Pitch.read
+  splits the lines, checks that each row has exactly the right number of fields, and
+  builds a fresh list of players, so anyone who left simply disappears. It keeps the drawn
+  position apart from the host's position, so players glide instead of jumping. When the
+  goal number in the G line goes up, the celebration starts.
+
+  Pitch extends JPanel and overrides paintComponent, and repaint asks Swing to draw it.
+  Now Ritvik explains the physics.
+
+============================================================================================
+SLIDE 7 / 16  -  ONE PHYSICS STEP
+Speaker: Ritvik    Time: 4:00-4:40
+--------------------------------------------------------------------------------------------
+
+ON THE SLIDE:
+  Title: The game moves in steps of 1/120 s
+
+  Top half: a timeline bar of 20 ms split into three blocks: "8.33 ms", "8.33 ms" (blue)
+    and a shorter "3.33 ms" (red), labelled "the last step uses only the time left".
+
+  Bottom half, three short bullets:
+  - Fast and slow laptops compute the same game
+  - Friction: the ball keeps about 64 % of its speed each second
+  - Goal = the whole ball past the line; scorer = last touch, assist = the touch before
+
+SAY (Slide 5, first two paragraphs):
+  All the physics runs on the host, in fixed steps of one hundred-and-twentieth of a
+  second. So a fast laptop and a slow laptop compute the same game.
+
+  In each step the ball moves and slows down: it keeps about sixty-four percent of its
+  speed each second. A goal is when the whole ball crosses the line. The scorer is the
+  last player who touched it, and the assist is the touch before.
+
+============================================================================================
+SLIDE 8 / 16  -  COLLISIONS AND BOUNCES
+Speaker: Ritvik    Time: 4:40-5:20
+--------------------------------------------------------------------------------------------
+
+ON THE SLIDE:
+  Title: Overlap → push apart → bounce
+
+  Left half: a diagram of two overlapping circles (one red, one blue). A line joins the
+    centres, labelled "d". The overlap is marked. Two arrows push the circles apart,
+    labelled "push along n". Under it: overlap = r1 + r2 − d.
+
+  Right half, a small table "Who moves":
+  player / player → 50 / 50
+  player / ball → 20 / 80
+  bumper → 0
+
+  Under the table, "Bounce": wall 80 % · bumper 60 % · player = dribble (no bounce)
+
+SAY (Slide 5, rest):
+  Then we check every pair of circles. If the distance between the centres is less than
+  the two radii added together, they overlap, and we push them apart along the line
+  between the centres. Two players take half each. The ball takes eighty percent, because
+  it is light.
+
+  A wall sends a fast ball back at eighty percent speed. A bumper sends it back at sixty
+  percent. A player does not bounce the ball; it moves with the player, so you can
+  dribble.
+
+============================================================================================
+SLIDE 9 / 16  -  BUGS WE FIXED
+Speaker: Ritvik    Time: 5:20-6:00
+--------------------------------------------------------------------------------------------
+
+ON THE SLIDE:
+  Title: Physics bugs we found and fixed
+
+  A large before → after table, "before" values in red, "after" values in yellow:
+  Player speed — up to 420 units/s → exactly 210
+  Corner bounce reversals — 119 → 0
+  Worst corner overlap — 6.2 → 0.02 units
+  Goals after the whistle — possible → none
+
+  Small footer: Fix: fixed 1/120 s steps · up to 60 push passes · then rollback
+
+SAY (Slide 6):
+  We tested the older versions hard and found real bugs.
+
+  First, the physics simulated more time than had passed, so a player could move up to
+  twice the correct speed. Now the last step uses only the time that is left. Speed is
+  exactly 210 units per second at every frame rate we tested, from 30 to 240.
+
+  Second, when players crowded a corner, the ball got stuck between them and bounced back
+  and forth, 119 times in one test. One push can cause a new overlap, so now the game
+  repeats the pushes up to 60 times. If a crowd still cannot settle, it puts everyone back
+  where they were before that step. The count is now zero.
+
+  Third, a goal could count after the clock reached zero. Now the simulation stops at
+  exactly zero. Now Allen Joji explains how a player moves and kicks.
+
+============================================================================================
+SLIDE 10 / 16  -  CONTROLS
+Speaker: Allen Joji    Time: 6:00-6:40
+--------------------------------------------------------------------------------------------
+
+ON THE SLIDE:
+  Title: Laptop or phone — same game
+
+  Left half: a drawing of keyboard keys W A S D, the four arrow keys, and a wide Space bar
+    labelled "kick".
+  Right half: the attached phone screenshot in landscape (mobile-landscape.png). If no
+    image is attached, draw a phone in landscape with a round thumb stick on the left and
+    a yellow round KICK button on the right.
+
+  One line at the bottom: Both thumbs at once — run and shoot together.
+
+SAY (Slide 7, first paragraph):
+  On the laptop, you move with W A S D or the arrow keys, and you kick with Space. On the
+  phone, you turn it to landscape. The left thumb moves a stick, and the right thumb
+  presses Kick. You can use both thumbs at the same time, so you can run and shoot
+  together.
+
+============================================================================================
+SLIDE 11 / 16  -  MOVE AND KICK
+Speaker: Allen Joji    Time: 6:40-7:20
+--------------------------------------------------------------------------------------------
+
+ON THE SLIDE:
+  Title: Moving and kicking
+
+  Left half: a vector sketch. An arrow "right = 1", an arrow "down = 1", and the diagonal
+    in red labelled "length √2 ≈ 1.41". Under it: "Divide by 1.41 → a diagonal is not
+    faster. Speed is always 210 units/s."
+
+  Right half: a red player circle, a small white ball within a dashed ring labelled "40
+    units", and an arrow from the ball labelled "500 units/s".
+  Under it, two short lines:
+  - 0.3 s between kicks
+  - A quick tap is remembered for 0.1 s
+
+SAY (Slide 7, rest):
+  A player always moves at 210 units per second. If you press right and down together, the
+  direction has length root two, about 1.41. We divide by that length, so a diagonal is
+  not faster than a straight run.
+
+  A kick works when the ball is within 40 units. The ball leaves at 500 units per second,
+  away from the player, and you must wait 0.3 seconds between kicks. A quick tap is
+  remembered for a tenth of a second, so the host still sees it.
+
+============================================================================================
+SLIDE 12 / 16  -  PITCH EDITOR AND REPLAYS
+Speaker: Allen Joji    Time: 7:20-8:00
+--------------------------------------------------------------------------------------------
+
+ON THE SLIDE:
+  Title: Custom pitches and replays
+
+  Left half "Pitch editor": a top-down green pitch with 3 grey round bumpers. Short lines:
+    Click to add, right-click to remove (up to 8) · Kick-off spots stay clear · "Use
+    pitch" → everyone gets it.
+
+  Right half "Replays": a video-player bar with a play button and a slider. Short lines:
+    20 snapshots per second · Play, pause, seek · Worst 10-minute replay: 8 MB.
+
+SAY (Slide 8):
+  The pitch editor lets the host design a field. You click to add a round bumper and
+  right-click to remove it, up to eight. You can also change the goal width. The editor
+  refuses a bumper that covers a kick-off spot or the centre. When the host clicks Use
+  pitch, every player gets it.
+
+  Each match also saves a replay. The host stores its snapshot twenty times a second, with
+  a time stamp. You open it from History, and you can play, pause and drag the slider.
+  When a replay file is read, it is checked first: the format, the times and the size. The
+  worst ten-minute replay we measured is 8 megabytes, under our 32 megabyte limit.
+
+  Now Allen Shibu explains the object-oriented design and our testing.
+
+============================================================================================
+SLIDE 13 / 16  -  OOP DESIGN
+Speaker: Allen Shibu    Time: 8:00-8:50
+--------------------------------------------------------------------------------------------
+
+ON THE SLIDE:
+  Title: Object-oriented design
+
+  Left half: a class diagram. Box "Circle — x, y, vx, vy, radius, distanceTo()". Two boxes
+    "Player" and "Ball" with inheritance arrows (hollow triangle heads) pointing up to
+    Circle. Two separate boxes: "Match — rules + physics only" and "League — match files +
+    Elo (start 1000, K = 24)".
+
+  Right half, four short lines:
+  - Inheritance: Player, Ball extend Circle
+  - Encapsulation: Match = rules only; League = files + Elo
+  - Interfaces: Runnable, ActionListener, KeyListener, HttpHandler
+  - Inner classes: Server.Acceptor, Clock, Connection
+
+SAY (Slide 9):
+  This slide shows where the OOP syllabus appears in the code.
+
+  Inheritance: Player and Ball both extend Circle. Circle has a position, a velocity, a
+  radius and a distance method. The bumpers in the pitch editor are plain Circle objects,
+  so one collision method works for players, the ball and bumpers.
+
+  Encapsulation: the Match class owns the rules and the physics. The windows and the
+  network code only give it key bits and read snapshots. The League class owns the match
+  files and rebuilds the Elo table from them: everyone starts at 1000, K is 24.
+
+  Interfaces: our threads implement Runnable, the phone server implements HttpHandler,
+  and, as Hari showed, the windows implement the Swing listener interfaces.
+
+  The server's acceptor, clock and each player connection are inner classes that run on
+  their own threads. We use static final constants for the ports and the time step, Vector
+  for lists, and IOException to reject bad files with a clear message.
+
+============================================================================================
+SLIDE 14 / 16  -  TESTED
+Speaker: Allen Shibu    Time: 8:50-9:20
+--------------------------------------------------------------------------------------------
+
+ON THE SLIDE:
+  Title: Tested
+
+  Three big number cards side by side:
+  "100" — automated checks pass on the final JAR
+  "1.44 million" — physics steps in a random search
+  "0" — failures in 3,000 random corner crowds
+
+  Small line at the bottom: Tests cover the bugs we know. No test proves zero bugs.
+
+SAY (Slide 10, first paragraph):
+  We have one hundred automated checks, and all of them pass on the final packaged JAR.
+  They cover full matches over real connections, the physics timing, the old bugs, the
+  phone server, the Swing windows and two browser engines. A random search ran three
+  thousand crowded corners and 1.44 million physics steps with no failures. These tests
+  cover the bugs we know. No test can prove that there are zero bugs.
+
+============================================================================================
+SLIDE 15 / 16  -  LIMITS
+Speaker: Allen Shibu    Time: 9:20-9:45
+--------------------------------------------------------------------------------------------
+
+ON THE SLIDE:
+  Title: Honest limits
+
+  Three short lines, each with a simple warning-style line icon:
+  - Local network only — a trusted classroom
+  - No encryption (TLS) — use demo passwords
+  - Phones use a web page, not a store app
+
+SAY (Slide 10, second paragraph):
+  The limits: LanBall is for a trusted classroom network. There is no encryption, and
+  phones send the password over plain local HTTP, so please use a demo password. The phone
+  version is a web page, not a store app.
+
+============================================================================================
+SLIDE 16 / 16  -  LIVE DEMO + QUESTIONS
+Speaker: Allen Shibu, then Krishnadas    Time: 9:45-10:00
+--------------------------------------------------------------------------------------------
+
+ON THE SLIDE:
+  Top: "Live demo" in large white text, and under it a row of small connected chips: Host
+    → Phone joins → Play → Summary → Replay → Pitch editor.
+  Centre-bottom: "Questions?" in very large yellow text, and under it in small text: "Q&A
+    led by Krishnadas".
+  No bullets.
+
+SAY (Slide 10, last paragraph):
+  Now the live demo. Ritvik hosts on this laptop, and a phone joins. If the Wi-Fi blocks
+  the phone, we use the laptop hotspot. Thank you. Krishnadas now takes your questions.
+
+============================================================================================
+DESIGN FOR EVERY SLIDE
+============================================================================================
+16:9 slides. Style: dark navy background (#0b1020), white text, red (#ff4d5e) and blue
+(#3fa9ff) team accents, yellow (#ffd166) highlights, one clean sans-serif font, no clip-art,
+no stock photos, lots of empty space.
+
+Screenshots are in LanBall-v9/screenshots. Keep at most 4 short bullets per slide.

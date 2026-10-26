@@ -1,0 +1,48 @@
+LANBALL V9 — GAMEPLAY-FIRST REVIEW (26 October 2026)
+
+Priority: responsive phone/PC play, simple code, then quiet visual polish.
+
+CHANGES
+- Phone inputs send promptly on direction changes, releases, Ready and team selection.
+- Phone snapshot polling changed from 33 ms to 25 ms; still one request in flight.
+- A short phone kick tap is queued until sent; the Java player remembers a new kick
+  for 100 ms so a press/release between physics ticks is not lost. The 300 ms kick
+  cooldown remains. Disconnect and kickoff clear the buffered tap.
+- PC client update wait changed from 25 ms to 16 ms.
+- Desktop protocol writes are buffered and flushed once per logical message,
+  reducing separate small writes for keys, team, command and chat.
+- Phone ball rendering now smooths snapshots, like player rendering.
+- Both renderers use frame-rate-independent exponential smoothing, with a shorter
+  response time. Physics and score authority remain entirely on the Java host.
+- Unchanged desktop chat/standings text and accepted team selection are no longer
+  rewritten on every update. This also avoids resetting scroll position needlessly.
+- Leaving the mobile match clears the old pitch state and celebration.
+- Viewing profiles no longer inserts unplayed/fictitious players into standings.
+- Selected pitch persists across host restarts; failed pitch saves no longer switch
+  the live match to an unsaved pitch.
+- Desktop tools moved to a separate heading row; Hide room gives the pitch more
+  space. Primary actions use gold, with quieter status text and dark controls.
+- Field shading and mobile surface colors are subtle. No image/font downloads,
+  animation library, sound engine, extra physics engine or runtime dependency added.
+
+MEASUREMENTS AND TEST LIMITS
+In a four-second local Chromium phone-emulation sample, before/after median game
+update interval was 33.6 / 25.4 ms. Rendering remained around 16.7 ms per frame
+(roughly 60 fps). These are local samples, not physical-device/Wi-Fi guarantees.
+
+Regression checks cover quick taps between physics ticks, cooldown, smoothing at
+30 versus 120 Hz, profile read-only behavior, pitch restart persistence, and failed
+pitch-save rollback. Browser checks include simultaneous movement/kick, cancellation,
+blur, 150 ms delayed requests, reconnect, chat, leave, portrait/landscape and narrow
+320-pixel viewports. WebKit pointer tests use synthetic events; Chromium uses CDP
+touch input. Physical iPhone/Android and classroom Wi-Fi still need rehearsal.
+
+DESIGN CHOICE
+Stable controls, clear team colors, one prominent primary action, immediate feedback
+and less visual clutter are the design principles here. No psychological claims,
+engagement gimmicks, or speculative research features were added to the game.
+
+RUN
+Restart the desktop application after replacing the JAR. Reload phone pages after
+restarting the host. Existing accounts/matches/replays stay in lanball-data.
+Use Hide room for a larger pitch. Phones still join using the Phones button URL.

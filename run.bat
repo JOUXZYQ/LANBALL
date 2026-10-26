@@ -1,5 +1,5 @@
 @echo off
-rem Starts LanBall. Saved players and matches go in the lanball-v4-data folder next to this file.
+rem Starts LanBall. Click Host on one laptop; others click Join or open the Phones address.
 cd /d "%~dp0"
-java -jar LanBall-v7.jar
+java -jar LanBall-v9.jar
 if errorlevel 1 pause

@@ -1,9 +1,8 @@
-/out/
-/tests/out/
-/lanball-*-data/
-/practice-data/
+lanball-data/
+docs/PREP_*.pdf
+docs/RITVIK_PREP.pdf
+docs/TALK.md
+docs/DEMO-AND-QA.md
+docs/SLIDE_PROMPTS.*
+docs/make_*.py
 *.class
-*.log
-.idea/
-.vscode/
-*.iml

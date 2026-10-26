@@ -1,4 +1,9 @@
 #!/bin/sh
-# Builds LanBall-v7.jar with the JDK only (Java 8 or newer). No Maven, no libraries.
-cd "$(dirname "$0")" || exit 1
-rm -rf out && javac -d out src/lanball/*.java && jar cfe LanBall-v7.jar lanball.LanBall -C out . && echo "Built LanBall-v7.jar"
+# Builds LanBall-v9.jar (needs JDK 17+).
+set -e
+cd "$(dirname "$0")"
+rm -rf build && mkdir -p build/classes/mobile
+javac --release 17 -encoding UTF-8 -d build/classes src/lanball/*.java
+cp resources/mobile/* build/classes/mobile/
+jar --create --file LanBall-v9.jar --main-class lanball.LanBall -C build/classes .
+echo Built LanBall-v9.jar
